@@ -1628,7 +1628,7 @@ private extension DraftingView {
                 Button(action: {
                     exportShareItem = ExportShareItem(items: [viewModel.exportableText])
                 }) {
-                    Label("Share as Text", systemImage: "text.quote")
+                    Label("Share as Text/ Email", systemImage: "text.quote")
                 }
 
                 Button(action: {
