@@ -5,6 +5,7 @@
 // displayTokens selection (simple vs complex) lives in DiffView using @AppStorage.
 
 import Foundation
+import Combine
 
 extension DraftingViewModel {
 
