@@ -3,7 +3,10 @@
 // Renders the word-level diff between Original and current text.
 //
 // Default (Simple) mode: clean two-way diff, blue/red only, no attribution.
-// Complex mode (opt-in via Settings): three-layer diff with AI/user colour coding.
+//   Tap-to-revert reverts the tapped change against the Original baseline
+//   (delta is treated as a manual edit — see `revertExportToken`).
+// Complex mode (opt-in via Settings): three-layer diff with AI/user colour
+//   coding. Tap-to-revert respects the AI/user layer semantics.
 //
 // The mode is controlled by @AppStorage("dk_useComplexDiffView") declared here
 // so that toggling in Settings triggers a reactive re-render without involving
@@ -40,12 +43,12 @@ struct DiffView: View {
                             tokenIndex: index,
                             coordinateSpaceName: diffCoordinateSpace
                         ) {
-                            // Revert is only meaningful in complex mode where tokens carry
-                            // source attribution. Simple tokens have source == nil —
-                            // suppress the gesture to avoid confusing semantics.
-                            guard token.source != nil else { return }
                             withAnimation(.easeInOut(duration: 0.2)) {
-                                viewModel.revertDiffToken(token)
+                                if useComplexDiffView {
+                                    viewModel.revertDiffToken(token)
+                                } else {
+                                    viewModel.revertExportToken(token)
+                                }
                             }
                         }
                         .id(token.id)
@@ -106,16 +109,16 @@ private struct DiffTokenView: View {
                 .foregroundColor(.primary)
                 .font(.dkBody)
         case .inserted:
+            // source == nil (simple mode) → aiInserted (blue), same as AI-inserted.
             let color = token.source == .user ? Color.userInserted : Color.aiInserted
             Text(token.text)
                 .foregroundColor(color)
                 .underline(true, color: color)
                 .font(.dkBody)
-                // Only attach tap gesture when source is set (complex mode tokens).
-                // Simple tokens (source == nil) suppress revert.
-                .onTapGesture(perform: token.source != nil ? onTap : {})
+                .onTapGesture(perform: onTap)
                 .background(bridgeFrameReporter)
         case .deleted:
+            // source == nil (simple mode) → aiDeleted (red), same as AI-deleted default.
             let color: Color = {
                 switch token.source {
                 case .aiThenUser: return .aiThenUserDeleted
@@ -127,8 +130,7 @@ private struct DiffTokenView: View {
                 .foregroundColor(color)
                 .strikethrough(true, color: color)
                 .font(.dkBody)
-                // Only attach tap gesture when source is set (complex mode tokens).
-                .onTapGesture(perform: token.source != nil ? onTap : {})
+                .onTapGesture(perform: onTap)
                 .background(bridgeFrameReporter)
         }
     }

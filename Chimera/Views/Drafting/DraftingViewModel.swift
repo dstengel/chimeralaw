@@ -2211,6 +2211,44 @@ final class DraftingViewModel: ObservableObject {
         objectWillChange.send()
     }
 
+    /// Reverts a Simple-mode (export) change. Tokens in `exportTokens` carry
+    /// no AI/user attribution — they are a clean two-way Original→current diff
+    /// — so the semantic is simply: undo this delta, treating the result as a
+    /// manual edit. Insertions are removed; deletions become equal again.
+    /// `currentText` is rebuilt from the mutated token list, and both token
+    /// arrays are recomputed so a subsequent toggle to Complex view (or a tab
+    /// round-trip) reflects the new baseline.
+    func revertExportToken(_ token: DiffToken) {
+        guard token.type != .equal else { return }
+        guard let groupId = token.groupId else { return }
+
+        pushSnapshot()
+
+        switch token.type {
+        case .deleted:
+            exportTokens = exportTokens.map { t in
+                if t.groupId == groupId && t.type == .deleted {
+                    return DiffToken(text: t.text, type: .equal)
+                }
+                return t
+            }
+        case .inserted:
+            exportTokens.removeAll { $0.groupId == groupId && $0.type == .inserted }
+        case .equal:
+            return
+        }
+
+        currentText = WordDiff.currentText(from: exportTokens)
+        hasManualEdits = true
+
+        // Invalidate caches so the next render rebuilds fresh tokens
+        // (with merged groupIds where reverts made neighbours contiguous).
+        lastExportCurrent = ""
+        diffNeedsForceRecompute = true
+        recomputeExportTokens()
+        recomputeDiffTokens()
+    }
+
     /// The text that should be exported / copied, depending on active tab.
     var exportableText: String {
         switch activeTab {
