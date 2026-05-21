@@ -2,6 +2,33 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>camera.viewfinder</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Use camera</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.daimos.chimera.useCamera</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>photo.on.rectangle</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Use photo</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.daimos.chimera.usePhoto</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>arrow.trianglehead.merge</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>Import Track Changes</string>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.daimos.chimera.importTrackChanges</string>
+		</dict>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
