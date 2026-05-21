@@ -763,7 +763,7 @@ final class DraftingService: ObservableObject {
             // HTTP error branches. Preserve behaviour where callers (user-key
             // fallback) key on .invalidAPIKey for 401.
             let detail = String(data: data, encoding: .utf8) ?? "Unknown"
-            logger.error("HTTP \(status) from API. detail=\(detail.prefix(400))")
+            logger.error("HTTP \(status) from API. detail=\(detail.prefix(2000))")
 
             switch status {
             case 401:
@@ -1016,9 +1016,15 @@ enum DraftingError: LocalizedError, Equatable {
             return "The AI service is temporarily unavailable (HTTP \(status)). Try again shortly."
         case .httpPermissionDenied:
             return "AI access denied (HTTP 403). Check your API key permissions."
-        case .clientError(let code, _):
+        case .clientError(let code, let detail):
+            if let msg = Self.anthropicErrorMessage(from: detail) {
+                return "Request rejected by the AI service (HTTP \(code)): \(msg)"
+            }
             return "Request rejected by the AI service (HTTP \(code)). Try again."
-        case .serverError(let code, _):
+        case .serverError(let code, let detail):
+            if let msg = Self.anthropicErrorMessage(from: detail) {
+                return "The AI service is temporarily unavailable (HTTP \(code)): \(msg)"
+            }
             return "The AI service is temporarily unavailable (HTTP \(code)). Try again shortly."
 
         // API body / response
@@ -1049,6 +1055,22 @@ enum DraftingError: LocalizedError, Equatable {
         case .networkError:
             return "Network error. Check your connection and try again."
         }
+    }
+
+    /// Decode an Anthropic error response body and return the inner
+    /// `error.message` if present. Returns nil for empty input, malformed
+    /// JSON, or shapes that don't match the expected envelope. The body is
+    /// of the form: {"type":"error","error":{"type":"…","message":"…"}}.
+    private static func anthropicErrorMessage(from body: String) -> String? {
+        guard !body.isEmpty, let data = body.data(using: .utf8) else { return nil }
+        struct Envelope: Decodable {
+            struct Inner: Decodable { let message: String? }
+            let error: Inner?
+        }
+        guard let env = try? JSONDecoder().decode(Envelope.self, from: data),
+              let msg = env.error?.message,
+              !msg.isEmpty else { return nil }
+        return msg
     }
 
     /// Whether a "Try again" action on the error banner should be offered.
