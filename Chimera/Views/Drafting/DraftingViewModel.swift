@@ -2785,6 +2785,16 @@ final class DraftingViewModel: ObservableObject {
     /// Called from the plus-sheet "Use Output as Original" card after
     /// the user confirms the popup.
     func useOutputAsOriginal() {
+        // Defensive flush: the Output editor binds to `clauseText`, but
+        // `useOutputAsOriginal` reads `currentText` for promotion. If the
+        // user makes manual edits on the Output tab and taps "Use Output
+        // as Original" without first switching tabs, the `clauseText`
+        // changes have not yet been written back to `currentText` (the
+        // tab-switch sync hasn't fired), so the promotion silently drops
+        // them. Gating on `activeTab == .current` keeps this a no-op for
+        // the .original and .showChanges tab paths, which don't suffer
+        // from this binding asymmetry.
+        if activeTab == .current { currentText = clauseText }
         guard canUseOutputAsOriginalFromPlusSheet else { return }
         let text = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
