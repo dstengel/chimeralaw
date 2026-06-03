@@ -566,15 +566,80 @@ final class DraftingService: ObservableObject {
         let outputTokens: Int
     }
 
+    /// A downscaled, size-bounded JPEG payload ready for the vision API.
+    private struct PreparedImage {
+        let jpegData: Data
+        let base64String: String
+        let pixelSize: CGSize
+        let byteCount: Int
+    }
+
+    /// Downscales `image` so its long edge is at most `maxLongEdge` px (preserving
+    /// aspect ratio) and encodes it as JPEG at `quality`. Returns nil only if JPEG
+    /// encoding fails. Uses `UIGraphicsImageRenderer` so the output pixel size
+    /// matches the target size regardless of the source image's scale.
+    private func encodeBoundedJPEG(_ image: UIImage, maxLongEdge: CGFloat, quality: CGFloat) -> PreparedImage? {
+        let sourcePixels = CGSize(width: image.size.width * image.scale,
+                                  height: image.size.height * image.scale)
+        let longestSide = max(sourcePixels.width, sourcePixels.height)
+        let scale = longestSide > maxLongEdge ? maxLongEdge / longestSide : 1.0
+        let targetSize = CGSize(width: max(1, (sourcePixels.width * scale).rounded()),
+                                height: max(1, (sourcePixels.height * scale).rounded()))
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        let renderer = UIGraphicsImageRenderer(size: targetSize, format: format)
+        let scaledImage = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: targetSize))
+        }
+
+        guard let data = scaledImage.jpegData(compressionQuality: quality) else {
+            return nil
+        }
+        let base64 = data.base64EncodedString()
+        return PreparedImage(jpegData: data,
+                             base64String: base64,
+                             pixelSize: targetSize,
+                             byteCount: base64.count)
+    }
+
+    /// Prepares a Track Changes screenshot for the Anthropic vision API. Downscales
+    /// to the recommended 1568 px long-edge bound, then steps down to 1024 px and
+    /// 768 px if the base64 payload would exceed the ~5 MB API ceiling (guarded at
+    /// 4.5 MB). Logs input/output dimensions and the final payload size.
+    private func prepareTrackChangesImage(_ image: UIImage) throws -> PreparedImage {
+        let base64Ceiling = 4_500_000
+        let steps: [CGFloat] = [1568, 1024, 768]
+
+        var prepared: PreparedImage?
+        for maxEdge in steps {
+            guard let candidate = encodeBoundedJPEG(image, maxLongEdge: maxEdge, quality: 0.85) else {
+                continue
+            }
+            prepared = candidate
+            if candidate.byteCount <= base64Ceiling {
+                break
+            }
+        }
+
+        guard let result = prepared else {
+            throw DraftingError.invalidResponse
+        }
+
+        let inputW = Int((image.size.width * image.scale).rounded())
+        let inputH = Int((image.size.height * image.scale).rounded())
+        logger.info("Track Changes image prepared: input \(inputW, privacy: .public)x\(inputH, privacy: .public)px → output \(Int(result.pixelSize.width), privacy: .public)x\(Int(result.pixelSize.height), privacy: .public)px, base64 \(result.byteCount, privacy: .public) bytes")
+        return result
+    }
+
     func analyzeTrackChanges(image: UIImage) async throws -> TrackChangesResult {
         guard !activeApiKey.isEmpty else {
             throw DraftingError.missingAPIKey
         }
 
-        guard let jpegData = image.jpegData(compressionQuality: 0.85) else {
-            throw DraftingError.invalidResponse
-        }
-        let base64String = jpegData.base64EncodedString()
+        let prepared = try prepareTrackChangesImage(image)
+        let base64String = prepared.base64String
 
         let systemPrompt = DraftingPrompts.trackChangesSystemPrompt
         let userText = DraftingPrompts.trackChangesUserMessage
